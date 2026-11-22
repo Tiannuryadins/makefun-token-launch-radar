@@ -1,93 +1,85 @@
 # Token Launch Radar
 
-Monitor newly launched tokens (Solana / pump.fun / DEX), score and rank them,
-and view the results as a CLI table, JSON, a watch loop, or a live web
-dashboard. Built for the make.fun bounty **"Build the best token launch
-radar"**.
+**make.fun bounty: "Build the best token launch radar"** — a program plus the
+web dashboard it writes. It reads a sealed snapshot of every protocol
+DefiLlama tracks, works out which ones still record no token, ranks them by
+what their launch would be worth, and hands in a dashboard that shows the
+board, a detail view for each protocol, and the steps to farm it.
 
-Zero dependencies — one file, `main.ts`, runnable with plain `node`.
+## The model (radar-2)
 
-## Quick start
+Implied value follows only from the snapshot's own figures — TVL, seven-day
+growth, age with no token, and chain breadth. No name is ever special-cased.
 
-Requires Node.js **>= 22.18** (type stripping is on by default there).
+```
+implied = TVL x 0.30 x (1 + growth% x 0.60) x maturity x breadth
+  growth   = clamp(change_7d, -50, 150) per cent
+  maturity = 0.70 + min(age_days, 730) / 730 x 0.30   (age unknown: 180 days)
+  breadth  = 1 + 0.03 x min(chains - 1, 4)
+```
+
+A protocol is pre-token when its record carries no token at all: no market
+cap, no CoinGecko id, no symbol. The board covers every slug on the
+snapshot's watchlist (40) and adds the strongest pre-token protocols below
+the watchlist floor, chosen by the model itself — by implied value, not by
+raw TVL. This snapshot's board holds **226 rows** (40 watchlist + 186 early).
+Protocols whose token already trades are kept apart and shown with the
+market's own values, never mixed into the ranked board.
+
+Each row carries a five-step farm plan derived from the protocol's own
+record (category, chains, TVL, age), each step naming its cost and time.
+
+## Usage
 
 ```bash
-node main.ts                  # rank the newest Solana launches
-node main.ts --limit 20       # top 20
-node main.ts --json           # JSON output
-node main.ts --search BONK    # rank pairs matching a search query
-node main.ts --watch 60       # refresh every 60 seconds
-node main.ts --serve 8080     # HTML dashboard at http://localhost:8080
-                              # (+ JSON API at /api/rankings)
-node main.ts --selftest       # deterministic unit tests (no network)
-node main.ts --help           # all options
+# Graded run (what the grader does): snapshot in, board + dashboard + dossier out
+node main.ts
+
+# Local run against the kit's snapshot
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <snapshot.json>
+
+# Deterministic model checks (no network, no files)
+node main.ts --selftest
 ```
 
-No install step, no API key. `npm start` / `npm run dashboard` /
-`npm run selftest` also work.
+With no arguments the program reads `/input/snapshot.json` and writes to
+`/output`: `board.json` (the ranked board), `data.js` (the dashboard's
+dataset), `dashboard/` and `screenshots/` (copied from this repository), and
+`dossier.json` (built with the vendored make.fun library). It uses no
+network at any point and is fully deterministic — two runs write the same
+bytes.
 
-## What it does
+## The dashboard
 
-1. **Discovers** recently surfaced tokens from two DexScreener public feeds
-   (latest token profiles + latest token boosts), filtered to the chosen chain
-   (default `solana`), deduplicated.
-2. **Enriches** each token with its best pair (highest liquidity, ties broken
-   by 24h volume) via the DexScreener token-pairs endpoint.
-3. **Scores** each token 0–100 with a transparent, deterministic formula
-   (see below), assigns risk/opportunity flags, and ranks them.
-4. **Presents** the ranking as a CLI table, JSON, an auto-refreshing watch
-   loop, or a self-contained HTML dashboard (built-in `node:http`, no deps).
+A static page, no framework and no network: `dashboard/index.html`,
+`dashboard/app.css`, `dashboard/app.js`. It renders the board from `data.js`
+with search, category and chain filters, a watchlist toggle, sortable
+columns, a detail view for every protocol (model breakdown + farm plan), a
+model panel that re-ranks the board live under your own constants, and a
+market view of the protocols already trading.
 
-## Scoring (0–100)
+The three screenshots under `screenshots/` show the board, a protocol's
+detail view and a filtered view. They were rendered from the dashboard's own
+data with PIL (no browser is available on the build machine), in the
+dashboard's own design and with its own values.
 
-| Component | Weight | How it is computed |
-| --- | --- | --- |
-| Liquidity | 25 | log scale of pair liquidity, saturates at $1M |
-| Volume (24h) | 25 | log scale of 24h volume, saturates at $5M |
-| Buy pressure | 15 | share of buys among 24h transactions |
-| Momentum | 15 | 1h price change, clamped to −50%…+500% |
-| Activity | 10 | log scale of 24h transaction count, saturates at 10k |
-| Freshness | 10 | <1h: 10 · <6h: 7 · <24h: 4 · older: 1 |
-
-Flags: `PUMP.FUN` (pump.fun pair), `NEW<1H` (pair younger than 1 hour),
-`HOT` (score ≥ 70), `LOW-LIQ` (liquidity < $1k), `SELL-PRESSURE`
-(>60% sells), `PARABOLIC` (+300% in 1h), `DUMPING` (−50% in 1h).
-
-## Data source & scope
-
-- **Source:** DexScreener public API — no key required, 300 req/min limit.
-  The program stays well under it (5 concurrent enrichment requests).
-- **Verified live endpoints** (checked 2026-11-14):
-  - `GET https://api.dexscreener.com/token-profiles/latest/v1`
-  - `GET https://api.dexscreener.com/token-boosts/latest/v1`
-  - `GET https://api.dexscreener.com/token-pairs/v1/{chainId}/{tokenAddress}`
-  - `GET https://api.dexscreener.com/latest/dex/search?q={query}`
-- **Scope:** any chain DexScreener supports (`--chain base`, `--chain ethereum`,
-  …). Default and best-tested: `solana`, where pump.fun launches surface.
-- **Coverage notes:**
-  - "Newly launched" means "recently surfaced on DexScreener" (profiles/boosts
-    feeds) — DexScreener has no public "new pairs" stream, so a token only
-    appears once DexScreener lists it. Pair age comes from `pairCreatedAt`.
-  - Some pump.fun pairs report no `liquidity.usd`; those score 0 on the
-    liquidity component and show `-` in the table (by design, not an error).
-  - Data is live market data: prices, volumes and rankings change every run.
-- **Not financial advice.** Scores are a heuristic ranking aid, not a buy
-  signal. Meme-token launches are extremely risky.
-
-## Example output
+## Layout
 
 ```
-TOKEN LAUNCH RADAR — solana — 10 token(s) — 2026-11-14T11:01:22Z
-  # SCORE SYMBOL            PRICE      MCAP       LIQ   VOL 24H       1H  BUY%    AGE DEX        FLAGS
-  1  73.5 GTA$          $0.000166   $166.2K    $36.8K   $157.2K  +212.0%   61%    28m pumpswap   NEW<1H HOT
-  2  70.9 Avatars       $0.000136   $130.3K    $27.3K   $598.2K  +136.0%   58%   1.2h pumpswap   HOT
-  ...
+main.ts                  Entry point: snapshot in, board + dashboard + dossier out
+lib/model.ts             The value model, farm plans, board validation, data.js
+vendor/makefun-board.ts  make.fun's dossier library (the kit's copy, byte for byte)
+dashboard/               The static page (index.html, app.css, app.js)
+screenshots/             Board, detail and filtered views (1440x900 PNG)
+LICENSE                  MIT
+BUILD-TRANSCRIPT.md      Build + repair record
 ```
 
-## Files
+## Data
 
-- `main.ts` — the whole program (CLI + scoring + dashboard server)
-- `package.json` — `{ "type": "module" }` + npm scripts (no dependencies)
-- `LICENSE` — MIT
-- `BUILD-TRANSCRIPT.md` — commands run, observed output, test results,
-  Node versions, and how to bundle for make.fun submission
+The snapshot is the sealed DefiLlama protocol data the competition mounts at
+`/input/snapshot.json` (758 protocols at or above $5,000,000 of TVL, 40 on
+the watchlist, fetched 2026-11-14). The program reads it and nothing else.
+A protocol is listed as pre-token when its record carries no token — the
+record is not proof, and implied values are this radar's own claim, never a
+promise.
