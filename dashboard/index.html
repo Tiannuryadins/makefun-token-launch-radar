@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Launch Radar — pre-token protocols ranked by implied value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">&#9673;</span>
+    <div>
+      <h1>Token Launch Radar</h1>
+      <p class="tagline">Which pre-token protocol is worth farming next — and what to do about it.</p>
+    </div>
+  </div>
+  <dl class="stats" id="stats" aria-label="Board statistics"></dl>
+</header>
+
+<main>
+  <section class="controls" aria-label="Board controls">
+    <label class="field grow">Search
+      <input id="q" type="search" placeholder="Protocol name or slug" autocomplete="off">
+    </label>
+    <label class="field">Category
+      <select id="cat"><option value="">All categories</option></select>
+    </label>
+    <label class="field">Chain
+      <select id="chain"><option value="">All chains</option></select>
+    </label>
+    <label class="check"><input id="watchOnly" type="checkbox"> Watchlist only</label>
+    <label class="field">Sort
+      <select id="sort">
+        <option value="value">Implied value</option>
+        <option value="tvl">TVL</option>
+        <option value="growth">7-day change</option>
+        <option value="age">Age (oldest first)</option>
+        <option value="name">Name</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="board-wrap" aria-label="Ranked board">
+    <table id="board">
+      <thead>
+        <tr>
+          <th class="num">#</th>
+          <th>Protocol</th>
+          <th>Category</th>
+          <th>Chains</th>
+          <th class="num">TVL</th>
+          <th class="num">7d</th>
+          <th class="num">Age</th>
+          <th class="num">Implied value</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="count" id="count" aria-live="polite"></p>
+  </section>
+
+  <aside id="detail" class="detail" hidden aria-label="Protocol detail"></aside>
+
+  <section class="model" aria-label="Value model">
+    <h2>The value model <span class="ver" id="modelVer"></span></h2>
+    <p class="model-formula" id="modelFormula"></p>
+    <p class="model-note">Implied value follows only from the snapshot's own figures — TVL, seven-day
+    growth, age with no token, and chain breadth. No name is ever special-cased. Move the sliders to
+    re-rank the board under your own constants; the board above updates live.</p>
+    <div class="sliders">
+      <label>Base multiple: TVL &times; <output id="baseOut"></output>
+        <input id="baseMul" type="range" min="0.10" max="0.50" step="0.01">
+      </label>
+      <label>Growth weight: <output id="gwOut"></output>
+        <input id="gw" type="range" min="0" max="1" step="0.05">
+      </label>
+      <button id="modelReset" type="button">Reset to the board's model</button>
+    </div>
+  </section>
+
+  <section class="live" aria-label="Live-token market view">
+    <h2>Already trading — the market's own values</h2>
+    <p class="live-note">These protocols record a token, so the board shows the market's value for
+    them instead of a model's. They are never mixed into the ranked board.</p>
+    <table id="liveTable">
+      <thead>
+        <tr><th>Protocol</th><th>Category</th><th class="num">TVL</th><th class="num">Market cap</th><th class="num">7d</th></tr>
+      </thead>
+      <tbody id="liveRows"></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p id="foot"></p>
+    <p class="fine">A protocol is listed as pre-token when its record carries no token — no market
+    cap, no CoinGecko id, no symbol. The record is not proof: a protocol on this board may still have
+    a token its record does not carry. Implied values are this radar's own claim, never a promise.</p>
+  </footer>
+</main>
+
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
